@@ -43,10 +43,31 @@ class My_Image:
             for width in range(self.width):
                 self.matrix[height][width] = [random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)]
 
-    def paint_points(self, list_points):
+    def check_image_borders(self, coordinate):
+        if (coordinate[0] >= 0 and coordinate[0] <= self.width) \
+                and (coordinate[1] >= 0 and coordinate[1] <= self.height):
+            return False, coordinate
+
+        if coordinate[0] < 0:
+            coordinate[0] = 0
+        elif coordinate[0] > self.width:
+            coordinate[0] = self.width
+
+        if coordinate[1] < 0:
+            coordinate[1] = 0
+        elif coordinate[1] > self.height:
+            coordinate[1] = self.height
+
+        return True, coordinate
+
+    def paint_points(self, list_points, color=[214, 214, 214]):
         for point in list_points:
             point_in_scale = self.get_scalable_point(point)
-            self.matrix[point_in_scale[0]][point_in_scale[1]] = [214, 214, 214]
+            self.matrix[point_in_scale[0]][point_in_scale[1]] = color
+
+    def paint_not_scalable_point(self, list_points, color=[214, 214, 214]):
+        for point in list_points:
+            self.matrix[point[0]][point[1]] = color
 
     def get_scalable_point(self, point):
         size_image = self.get_scalable_size()
@@ -60,7 +81,7 @@ class My_Image:
         modified_first_coordinate = int(size_image[0] * self.value_shift_image[0]) + int((first_coordinate * half_width))
         modified_second_coordinate = int((float(second_coordinate) * half_height) + size_image[1] * self.value_shift_image[1])
 
-        return (modified_first_coordinate, modified_second_coordinate)
+        return [modified_first_coordinate, modified_second_coordinate]
 
     def paint_lines(self, info_object):
         list_points = info_object.get('point')
@@ -124,6 +145,7 @@ class My_Image:
         return info_object
 
     def get_barycentric_coordinates(self, point):
+        color = [128, 128, 128]
         first_point = point[0]
         second_point = point[1]
         third_point = point[2]
@@ -131,12 +153,47 @@ class My_Image:
         min_max_x = [min([first_point[0], second_point[0], third_point[0]]),
                      max([first_point[0], second_point[0], third_point[0]])]
 
-        min_max_x = [min([first_point[1], second_point[1], third_point[1]]),
+        min_max_y = [min([first_point[1], second_point[1], third_point[1]]),
                      max([first_point[1], second_point[1], third_point[1]])]
 
+        check_area = []
+
+        step = 0.01
+
+        for value_x in np.arange(min_max_x[0], min_max_x[1] + 1, step):
+            for value_y in np.arange(min_max_y[0], min_max_y[1] + 1, step):
+                check_area.append(self.get_scalable_point([value_x, value_y]))
+
+        for coordinate in check_area:
+            _, coordinate = self.check_image_borders(coordinate)
+
+            # x,y _0 - first point
+            # x,y _1 - second point
+            # x,y _2 - third point
+            # x,y - coordinate
+
+            lambda0 = ((second_point[0] - third_point[0])*(coordinate[1] - third_point[1]) - (second_point[1] - third_point[1])*(coordinate[0] - third_point[0]))\
+                   / ((second_point[0] - third_point[0])*(first_point[1] - third_point[1]) - (second_point[1] - third_point[1])*(first_point[0] - third_point[0]))
+
+            lambda1 = ((third_point[0] - first_point[0]) * (coordinate[1] - first_point[1]) - (third_point[1] - first_point[1])*(coordinate[0] - first_point[0])) \
+                      / ((third_point[0] - first_point[0]) * (second_point[1] - first_point[1]) - (third_point[1] - first_point[1])*(second_point[0] - first_point[0]))
+
+            lambda2 = ((first_point[0] - second_point[0]) * (coordinate[1] - second_point[1]) - (first_point[1] - second_point[1])*(coordinate[0] - second_point[0]))\
+                      / ((first_point[0] - second_point[0]) * (third_point[1] - second_point[1]) - (first_point[1] - second_point[1])*(third_point[0] - second_point[0]))
 
 
-        lambda_0 = ((x1 - x2)*(y - y2) - (y1 - y2)(x - x2)) / ((x1 - x2)*(y0 - y2) - (y1 - y2) (x0 - x2))
+
+            ### Check sum barycentric coordinates == 0
+            sum_lambda = lambda0 + lambda1 + lambda2
+            # if sum_lambda > 0.9 and sum_lambda < 1.1:
+            #
+            print(f'lambda_0 {lambda0} lambda_1 {lambda1} lambda_2 {lambda2} Sum: {sum_lambda}')
+
+            if lambda0 > 0 and lambda1 > 0 and lambda2 > 0:
+                self.paint_not_scalable_point([coordinate], color=[18, 128, 128])
+
+
+
 
 
 
@@ -171,9 +228,13 @@ if __name__ == '__main__':
         'point': [[-2.005891, -0.216794], [-1.208645, -0.530387], [-1.207215, -0.745505]],
         'connect_points': [[1, 2, 3]]
     }
+
     test_image.paint_points(test_info_object['point'])
     test_image.paint_lines(test_info_object)
+    test_image.get_barycentric_coordinates(test_info_object['point'])
     test_image.save_image('test_rectangle.png')
+
+
 
 
 
