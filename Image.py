@@ -1,10 +1,8 @@
 import math
-
 from PIL import Image
 import numpy as np
 import random
 import re
-import time
 
 
 class My_Image:
@@ -21,6 +19,7 @@ class My_Image:
             [0, self.height, self.height/2],
             [0, 0, 1]
         ])
+        self.z_buffer = np.full((self.height, self.width), 0, dtype=np.single)
 
     def get_image(self):
         return Image.fromarray(self.matrix)
@@ -55,26 +54,28 @@ class My_Image:
                 self.matrix[height][width] = [random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)]
 
     def check_image_borders(self, point):
-        if (point[0] >= 0 and point[0] <= self.width) \
-                and (point[1] >= 0 and point[1] <= self.height):
+        if (point[0] >= 0 and point[0] < self.width) \
+                and (point[1] >= 0 and point[1] < self.height):
             return False, point
 
         if point[0] < 0:
             point[0] = 0
-        elif point[0] > self.width:
-            point[0] = self.width
+        elif point[0] >= self.width:
+            point[0] = self.width - 1
 
         if point[1] < 0:
             point[1] = 0
-        elif point[1] > self.height:
-            point[1] = self.height
+        elif point[1] >= self.height:
+            point[1] = self.height - 1
 
         return True, point
 
     def paint_points(self, list_points, color=[214, 214, 214]):
         for point in list_points:
-            _, point = self.check_image_borders(point)
-            self.matrix[point[0]][point[1]] = color
+
+            _, new_point = self.check_image_borders(point)
+            self.matrix[new_point[0]][new_point[1]] = color
+
 
     # def get_scalable_point(self, point, type=int):
     #     # print(self.matrix_scale)
@@ -98,8 +99,8 @@ class My_Image:
         modified_third_coordinate = third_coordinate * half_depth
 
         if type == float:
-            modified_first_coordinate = round(modified_first_coordinate, 2)
-            modified_second_coordinate = round(modified_second_coordinate, 2)
+            modified_first_coordinate = modified_first_coordinate
+            modified_second_coordinate = modified_second_coordinate
             return [modified_first_coordinate, modified_second_coordinate, modified_third_coordinate]
 
         elif type == int:
@@ -176,14 +177,13 @@ class My_Image:
 
             if type == 'v':
                 info_object['point'].append([
-                                # int(size_image[0] * self.value_shift_image[0]) +
-                                # int((float(list_value[2]) * half_width)),
-                                # int((float(list_value[0]) * half_height)
-                                #      + size_image[1] * self.value_shift_image[1]
-                                #     )
                                 float(list_value[0]), float(list_value[1]), float(list_value[2])
                             ])
             elif type == 'f':
+                try:
+                    list_value.remove('')
+                except:
+                    pass
                 for values in [[list_value[0], list_value[1 + i], list_value[2 + i]] for i in range(len(list_value) - 2)]:
                     info_object['connect_points'].append(
                         tuple([int(i.split('/')[0]) for i in values])
@@ -194,32 +194,21 @@ class My_Image:
 
             elif type == 'vn':
                 info_object['normal_value'].append([
-                    # int(size_image[0] * self.value_shift_image[0]) +
-                    # int((float(list_value[2]) * half_width)),
-                    # int((float(list_value[0]) * half_height)
-                    #      + size_image[1] * self.value_shift_image[1]
-                    #     )
                     float(list_value[0]), float(list_value[1]), float(list_value[2])
                 ])
 
 
         return info_object
 
-    # def draw_triangles(self, info_object):
-    #     for points in info_object.get('connect_points'):
-    #         point_coordinate = [info_object.get('point')[point - 1] for point in points]
-    #         normal_point_coordinate = self._normal(point_coordinate[0], point_coordinate[1], point_coordinate[2])
-    #         value_angle_of_incidence = self._angle_of_incidence(normal_point_coordinate)
-    #         if value_angle_of_incidence < 0:
-    #             self._draw_barycentric_coordinates(point_coordinate, color=(0, 64*value_angle_of_incidence, 0))
-
     def draw_triangles(self, info_object):
         for points, normal in zip(info_object.get('connect_points'), info_object.get('normal')):
             point = [info_object.get('point')[point - 1] for point in points]
-            normal_point_coordinate = self._normal(point[0], point[1], point[2])
-            value_angle_of_incidence = self._angle_of_incidence(normal_point_coordinate)
-            if value_angle_of_incidence < 0:
-                self._draw_barycentric_coordinates(point, normal, info_object.get('normal_value'))
+
+            # Task 14
+            # normal_point_coordinate = self._normal(point[0], point[1], point[2])
+            # value_angle_of_incidence = self._angle_of_incidence(normal_point_coordinate)
+            # if value_angle_of_incidence < 0:
+            self._draw_barycentric_coordinates(point, normal, info_object.get('normal_value'))
 
     # def _draw_barycentric_coordinates
 
@@ -266,6 +255,9 @@ class My_Image:
     #             except ZeroDivisionError:
     #                 pass
 
+    def _zero_division(self, first_argument, second_argument):
+        return float(first_argument)/second_argument if second_argument else 0
+
     def _draw_barycentric_coordinates(self, points, normal, normal_value, color=[127, 127, 127]):
         _, first_point = self.check_image_borders(self.get_scalable_point(points[0], type=float))
         _, second_point = self.check_image_borders(self.get_scalable_point(points[1], type=float))
@@ -279,7 +271,7 @@ class My_Image:
 
         step = 1
 
-        z_buffer = np.full((self.height, self.width), np.inf, dtype=np.uint8)
+
 
         for value_x in np.arange(min_max_x[0], min_max_x[1]+step, step):
             for value_y in np.arange(min_max_y[0], min_max_y[1]+step, step):
@@ -292,9 +284,9 @@ class My_Image:
                     x1, y1, _ = second_point
                     x2, y2, _ = third_point
 
-                    lambda0 = ((x1 - x2) * (y - y2) - (y1 - y2) * (x - x2)) / ((x1 - x2) * (y0 - y2) - (y1 - y2) * (x0 - x2))
-                    lambda1 = ((x2 - x0) * (y - y0) - (y2 - y0) * (x - x0)) / ((x2 - x0) * (y1 - y0) - (y2 - y0) * (x1 - x0))
-                    lambda2 = ((x0 - x1) * (y - y1) - (y0 - y1) * (x - x1)) / ((x0 - x1) * (y2 - y1) - (y0 - y1) * (x2 - x1))
+                    lambda0 = self._zero_division(((x1 - x2) * (y - y2) - (y1 - y2) * (x - x2)), ((x1 - x2) * (y0 - y2) - (y1 - y2) * (x0 - x2)))
+                    lambda1 = self._zero_division(((x2 - x0) * (y - y0) - (y2 - y0) * (x - x0)), ((x2 - x0) * (y1 - y0) - (y2 - y0) * (x1 - x0)))
+                    lambda2 = self._zero_division(((x0 - x1) * (y - y1) - (y0 - y1) * (x - x1)), ((x0 - x1) * (y2 - y1) - (y0 - y1) * (x2 - x1)))
 
                     ### Check sum barycentric coordinates == 0
                     # sum_lambda = lambda0 + lambda1 + lambda2
@@ -304,7 +296,7 @@ class My_Image:
 
                         z_streak = lambda0*first_point[2] + lambda1*second_point[2] + lambda2*third_point[2]
 
-                        if z_buffer[x][y] > z_streak:
+                        if z_streak > self.z_buffer[x][y]:
                             normal0 = normal_value[normal[0] - 1]
                             normal1 = normal_value[normal[1] - 1]
                             normal2 = normal_value[normal[2] - 1]
@@ -316,7 +308,12 @@ class My_Image:
                             color = (0, 255 * (lambda0 * l0 + lambda1 * l1 + lambda2 * l2), 0)
 
                             self.paint_points([[x, y]], color=color)
-                            z_buffer[x][y] = z_streak
+                            self.z_buffer[x][y] = z_streak
+
+                        # else:
+                        #     print(f'Debug: x: {x} y:{y} z_streak: {z_streak} lambda0 {lambda0} first_point[2] '
+                        #           f'{first_point[2]} lambda1 {lambda1} second_point[2] {second_point[2]} lambda2 {lambda2} third_point[2] {third_point[2]}')
+
 
                 except ZeroDivisionError:
                     pass
@@ -378,7 +375,7 @@ class My_Image:
         matrix_multi = matrix_1.dot(matrix_2)
         matrix_result = matrix_multi.dot(matrix_3)
 
-        return np.round(np.dot(matrix_result, np.array(point).T).T, 3).tolist()
+        return np.dot(matrix_result, np.array(point).T).T.tolist()
 
     def rotate_matrix(self, matrix, angel):
         for index in range(len(matrix)):
@@ -390,27 +387,15 @@ class My_Image:
 if __name__ == '__main__':
     test_image = My_Image()
 
-    test_image.file_path = 'Axe.obj'
-    test_image.scale = 0.2
-    test_image.value_shift_image = (1.8, 1)
-
-    # test_image.set_white()
-    # test_image.save_image('test_image.png')
-    # test_image.set_color([255, 0, 0])
-    # test_image.save_image('test_image_1.png')
-    # test_image.chaos_color()
-    # test_image.save_image('test_image_2.png')
-
-    # list_points = [(500, 1000), (2000, 1000)]
-    #
-    # test_image.paint_line(list_points[0], list_points[1])
-    # test_image.save_image('test_line.png')
+    test_image.file_path = 'lego obj.obj'
+    test_image.scale = 0.08
+    test_image.value_shift_image = (7, 1.)
 
     ### Draw Axe
 
     info_object = test_image.parse_file()
 
-    info_object['point'] = test_image.rotate_matrix(info_object['point'], [90, 90, 0])
+    info_object['point'] = test_image.rotate_matrix(info_object['point'], [0, 90, 0])
 
     test_image.paint_points(test_image.get_scalable_list(info_object['point']))
     test_image.paint_lines(info_object)
@@ -419,10 +404,14 @@ if __name__ == '__main__':
 
 
     # test_info_object = {
-    #     'point': [[-2.005891, -0.216794, -0.216794], [-1.208645, -0.530387, -0.216794], [-1.607215, -0.745505, -0.216794], [-1.007215, 0.445505, -0.216794]],
+    #     'point': [[-2.005891, -0.216794, -0.216794], [-1.208645, -0.530387, -0.216794], [-1.607215, -0.745505, -0.216794]],
     #     'connect_points': [[1, 2, 3]]
     # }
     #
+    # pipychnik = test_image._normal(test_info_object.get('point')[0], test_info_object.get('point')[1], test_info_object.get('point')[2])
+    # print(pipychnik)
+    # print(test_image._angle_of_incidence(pipychnik))
+
     # print(test_image.get_scalable_point(test_info_object.get('point')[0]))
     # test_image.new_get_scalable_point(test_info_object.get('point')[0])
 
